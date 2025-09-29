@@ -4,15 +4,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-# File path
-file_path = r"C:\Users\elver\OneDrive\Desktop\ITSC 3162\NBA archive (1)\team_traditional.csv"
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Load dataset
+# --- Load dataset ---
+file_path = r"C:\Users\elver\Project 2 classification\NBA-Classification-Project\team_traditional.csv"
 team_data = pd.read_csv(file_path)
 print("Team-level dataset loaded successfully!")
-
-# Strip spaces from column names (just in case)
-team_data.columns = team_data.columns.str.strip()
 
 # Preview columns
 print("Columns in dataset:")
@@ -40,30 +39,11 @@ print(f"Filtered dataset shape (2000+ seasons): {team_data.shape}")
 print("\nCleaned dataset shape:", team_data.shape)
 print(team_data.head())
 
-# Save cleaned dataset to CSV
-clean_path = r"C:\Users\elver\OneDrive\Desktop\ITSC 3162\NBA archive (1)\nba_cleaned_2000.csv"
-team_data.to_csv(clean_path, index=False)
-print(f"Cleaned dataset saved to: {clean_path}")
-
-# Load the cleaned dataset
-team_data = pd.read_csv(clean_path)
-
-# Group by win/loss and calculate average stats
 win_loss_summary = team_data.groupby("win").mean(numeric_only=True)
-print("\nAverage stats for Wins (1) vs Losses (0):")
-print(win_loss_summary)
+
 
 # --- Visualizations ---
-
-# 1. Average Points in Wins vs Losses
-plt.figure(figsize=(6,4))
-win_loss_summary["PTS"].plot(kind="bar", color=["red","green"])
-plt.title("Average Points: Wins vs Losses")
-plt.xticks(ticks=[0,1], labels=["Loss", "Win"], rotation=0)
-plt.ylabel("Points")
-plt.show()
-
-# 2. Average FG% in Wins vs Losses
+# Average FG% in Wins vs Losses
 plt.figure(figsize=(6,4))
 win_loss_summary["FG%"].plot(kind="bar", color=["red","green"])
 plt.title("Average FG%: Wins vs Losses")
@@ -71,7 +51,7 @@ plt.xticks(ticks=[0,1], labels=["Loss", "Win"], rotation=0)
 plt.ylabel("FG%")
 plt.show()
 
-# 3. Average Rebounds and Turnovers in Wins vs Losses
+# Average Rebounds and Turnovers in Wins vs Losses
 plt.figure(figsize=(8,5))
 win_loss_summary[["REB", "TOV"]].plot(kind="bar", color=["blue","orange"])
 plt.title("Average Rebounds & Turnovers: Wins vs Losses")
@@ -79,15 +59,7 @@ plt.xticks(ticks=[0,1], labels=["Loss", "Win"], rotation=0)
 plt.ylabel("Count")
 plt.show()
 
-# 4. Average AST, STL, BLK, PF in Wins vs Losses
-plt.figure(figsize=(10,5))
-win_loss_summary[["AST","STL","BLK","PF"]].plot(kind="bar", color=["blue","orange","green","purple"])
-plt.title("Average AST, STL, BLK, PF: Wins vs Losses")
-plt.xticks(ticks=[0,1], labels=["Loss","Win"], rotation=0)
-plt.ylabel("Count")
-plt.show()
-
-# 5. Home vs Away win rate
+# Home vs Away win rate
 home_win_rate = team_data.groupby("HOME")["win"].mean()
 plt.figure(figsize=(6,4))
 home_win_rate.plot(kind="bar", color=["grey","yellow"])
@@ -96,48 +68,43 @@ plt.xticks(ticks=[0,1], labels=["Away","Home"], rotation=0)
 plt.ylabel("Win Rate")
 plt.show()
 
-# --- Classification Models ---
-
-# Select features and target
+# --- Classification Model: Decision Tree ---
 features = ["PTS", "REB", "AST", "TOV", "FG%", "3P%", "FT%", "HOME"]
 target = "win"
 
 X = team_data[features]
 y = team_data[target]
 
-# ----------------------
-# Model 1: Simple Decision Tree
-# ----------------------
-# Use median points as threshold to predict win
-pts_threshold = X["PTS"].median()
-y_pred_tree = (X["PTS"] > pts_threshold).astype(int)
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Calculate accuracy
-accuracy_tree = (y_pred_tree == y).mean()
-print(f"\nDecision Tree Accuracy (PTS split): {accuracy_tree:.2f}")
+# Fit decision tree
+clf = DecisionTreeClassifier(max_depth=5, random_state=42)  # you can tune max_depth
+clf.fit(X_train, y_train)
 
-# ----------------------
-# Model 2: Simple KNN (Manual, using numpy)
-# ----------------------
-# Sample subset for speed
-sample = team_data.sample(2000, random_state=42)
-X_sample = sample[features].to_numpy()
-y_sample = sample[target].to_numpy()
+# Predictions
+y_pred = clf.predict(X_test)
 
-k = 5  # number of neighbors
-y_pred_knn = []
+# Accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\nDecision Tree Accuracy: {accuracy:.2f}")
 
-for i in range(len(X_sample)):
-    # Compute distances to all other points
-    distances = np.linalg.norm(X_sample - X_sample[i], axis=1)
-    
-    # Get indices of k nearest neighbors (exclude self)
-    nearest_idx = distances.argsort()[1:k+1]
-    
-    # Predict by majority vote
-    pred = round(y_sample[nearest_idx].mean())
-    y_pred_knn.append(pred)
+# Classification report
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
 
-y_pred_knn = np.array(y_pred_knn)
-accuracy_knn = (y_pred_knn == y_sample).mean()
-print(f"KNN Accuracy (k={k}): {accuracy_knn:.2f}")
+# Confusion matrix
+print("\nConfusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+# Feature importance
+importances = clf.feature_importances_
+print("\nFeature Importances:")
+for feature, importance in zip(features, importances):
+    print(f"{feature}: {importance:.3f}")
+
+# --- Visualize the decision tree ---
+plt.figure(figsize=(40,20))
+plot_tree(clf, feature_names=features, class_names=["Loss","Win"], filled=True, rounded=True)
+plt.title("Decision Tree for NBA Win Prediction")
+plt.show()
